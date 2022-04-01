@@ -398,10 +398,12 @@ class Database(
         schema: Optional[str] = None,
         mutator: Optional[Callable[[pd.DataFrame], None]] = None,
     ) -> pd.DataFrame:
-        sqls = [str(s).strip(" ;") for s in sqlparse.parse(sql)]
-
-        engine = self.get_sqla_engine(schema=schema)
-        username = utils.get_username()
+        # before we split sqls using sql parse, however this core code is only reachable
+        # with single sql queries. Thus, we removed the engine spec parser
+        # sqls = self.db_engine_spec.parse_sql(sql)
+        
+        engine = self.get_sqla_engine(schema=schema, user_name=username)
+        username = utils.get_username() or username
 
         def needs_conversion(df_series: pd.Series) -> bool:
             return (
@@ -416,13 +418,10 @@ class Database(
 
         with closing(engine.raw_connection()) as conn:
             cursor = conn.cursor()
-            for sql_ in sqls[:-1]:
-                _log_query(sql_)
-                self.db_engine_spec.execute(cursor, sql_)
-                cursor.fetchall()
+            cursor.fetchall()
 
-            _log_query(sqls[-1])
-            self.db_engine_spec.execute(cursor, sqls[-1])
+            _log_query(sql)
+            self.db_engine_spec.execute(cursor, sql)
 
             data = self.db_engine_spec.fetch_data(cursor)
             result_set = SupersetResultSet(
